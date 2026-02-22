@@ -106,18 +106,31 @@ export function getItemsBySeller(sellerId: string) { return items.filter((i) => 
 export const currentUser = sellers[0]
 
 // Legacy compat — old pages may import mockItems
-export const mockItems = items.map((item) => ({
-  id: item.id,
-  title: item.title,
-  price: item.price,
-  category: item.category,
-  condition: item.condition,
-  description: item.description,
-  images: [item.imageUrl],
-  seller: { name: item.sellerName, rating: getSellerById(item.sellerId)?.trustScore ?? 4.5, college: getSellerById(item.sellerId)?.college ?? "" },
-  location: item.pickupLocation,
-  posted: item.listedAt,
-}))
+export const mockItems = items.map((item) => {
+  const seller = getSellerById(item.sellerId)
+  const trust = seller?.trustScore ?? 4.5
+  const name = item.sellerName
+  return {
+    id: item.id,
+    title: item.title,
+    price: item.price,
+    category: item.category,
+    condition: item.condition,
+    description: item.description,
+    images: [item.imageUrl],
+    seller: {
+      name,
+      rating: trust,
+      trustScore: trust,
+      college: seller?.college ?? "",
+      hostel: seller?.hostel ?? "",
+      avatar: name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2),
+    },
+    location: item.pickupLocation,
+    listedDate: item.listedAt,
+    posted: item.listedAt,
+  }
+})
 
 // ——— LEGACY EXPORTS for existing pages ———
 

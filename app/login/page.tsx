@@ -2,55 +2,59 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { ShieldCheck, Loader2, Mail, CheckCircle2 } from "lucide-react"
+import { ShieldCheck, Loader2, LogIn, Eye, EyeOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
+import { useRouter } from "next/navigation"
 
 export default function LoginPage() {
   const supabase = createClient()
+  const router = useRouter()
 
-  const [email, setEmail] = useState("")
+  const [studentId, setStudentId] = useState("")
+  const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [linkSent, setLinkSent] = useState(false)
   const [error, setError] = useState("")
 
-  const handleSendLink = async () => {
+  const handleLogin = async () => {
     setError("")
-    if (!email || !email.includes("@")) {
-      setError("Please enter a valid email address")
+    if (!studentId.trim()) {
+      setError("Please enter your Student ID")
+      return
+    }
+    if (!password) {
+      setError("Please enter your password")
       return
     }
 
     setLoading(true)
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+    // Login using the fake email pattern: studentId@campuscart.local
+    const fakeEmail = `${studentId.trim().toLowerCase()}@campuscart.local`
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: fakeEmail,
+      password,
     })
     setLoading(false)
 
-    if (otpError) {
-      setError(otpError.message)
+    if (signInError) {
+      setError("Invalid Student ID or password")
     } else {
-      setLinkSent(true)
+      router.push("/dashboard")
     }
   }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Header */}
       <header className="border-b border-border bg-card/80 backdrop-blur-lg">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <ShieldCheck className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-bold text-foreground">
-              CampusCart
-            </span>
+            <span className="text-lg font-bold text-foreground">CampusCart</span>
           </Link>
         </div>
       </header>
@@ -62,11 +66,9 @@ export default function LoginPage() {
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
                 <ShieldCheck className="h-7 w-7 text-primary" />
               </div>
-              <h1 className="text-2xl font-bold text-foreground">
-                Welcome back
-              </h1>
+              <h1 className="text-2xl font-bold text-foreground">Welcome back</h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                Log in to your campus marketplace
+                Log in with your Student ID
               </p>
             </div>
 
@@ -76,70 +78,47 @@ export default function LoginPage() {
               </div>
             )}
 
-            {!linkSent ? (
-              <div className="flex flex-col gap-4">
-                <div>
-                  <Label htmlFor="login-email">Email Address</Label>
+            <div className="flex flex-col gap-4">
+              <div>
+                <Label htmlFor="student-id">Student ID</Label>
+                <Input
+                  id="student-id"
+                  placeholder="e.g. BT240001"
+                  className="mt-1.5 uppercase"
+                  value={studentId}
+                  onChange={(e) => setStudentId(e.target.value.toUpperCase())}
+                />
+              </div>
+              <div>
+                <Label htmlFor="login-password">Password</Label>
+                <div className="relative mt-1.5">
                   <Input
-                    id="login-email"
-                    type="email"
-                    placeholder="you@university.ac.in"
-                    className="mt-1.5"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleSendLink()
-                    }}
+                    id="login-password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleLogin() }}
                   />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
-                <Button
-                  className="w-full gap-2"
-                  onClick={handleSendLink}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Mail className="h-4 w-4" />
-                  )}
-                  Send Magic Link
-                </Button>
               </div>
-            ) : (
-              <div className="flex flex-col items-center gap-4 py-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                  <CheckCircle2 className="h-8 w-8 text-primary" />
-                </div>
-                <div className="text-center">
-                  <h3 className="font-semibold text-foreground">Check your email!</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    We sent a login link to <strong>{email}</strong>
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Click the link in the email to sign in. Check spam if you don&apos;t see it.
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setLinkSent(false)
-                    setEmail("")
-                  }}
-                  className="mt-2"
-                >
-                  Use a different email
-                </Button>
-              </div>
-            )}
+              <Button className="w-full gap-2" onClick={handleLogin} disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+                Log In
+              </Button>
+            </div>
           </div>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             New here?{" "}
-            <Link
-              href="/register"
-              className="font-medium text-primary hover:underline"
-            >
+            <Link href="/register" className="font-medium text-primary hover:underline">
               Create an account
             </Link>
           </p>

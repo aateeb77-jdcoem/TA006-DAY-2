@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import {
   Search,
@@ -8,7 +8,6 @@ import {
   Monitor,
   BookOpen,
   Package,
-  Star,
   SlidersHorizontal,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -17,6 +16,21 @@ import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { mockItems, conditions } from "@/lib/mock-data"
+import { StarRating } from "@/components/star-rating"
+
+type ListingItem = {
+  id: string
+  title: string
+  price: number
+  category: string
+  condition: string
+  description: string
+  images: string[]
+  seller: { name: string; rating: number; trustScore: number; college: string; avatar: string }
+  location: string
+  listedDate: string
+  posted: string
+}
 
 const categoryIcons = {
   Furniture: Armchair,
@@ -31,12 +45,52 @@ export default function MarketplacePage() {
   const [search, setSearch] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("All")
   const [priceRange, setPriceRange] = useState([0, 100000])
-  const [selectedCondition, setSelectedCondition] = useState<string | null>(
-    null
-  )
+  const [selectedCondition, setSelectedCondition] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [dbListings, setDbListings] = useState<ListingItem[]>([])
 
-  const filtered = mockItems.filter((item) => {
+  // Load listings from localStorage (posted via the sell form)
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("campus_cart_listings")
+      if (!stored) return
+      const raw: {
+        id: string; title: string; price: number; category: string;
+        condition: string; description?: string; images?: string[];
+        location?: string; created_at?: string; seller_name?: string;
+      }[] = JSON.parse(stored)
+      if (!Array.isArray(raw)) return
+      const mapped: ListingItem[] = raw.map((l) => ({
+        id: l.id,
+        title: l.title,
+        price: l.price,
+        category: l.category,
+        condition: l.condition,
+        description: l.description ?? "",
+        images: l.images?.length
+          ? l.images
+          : ["https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=400"],
+        seller: {
+          name: l.seller_name ?? "Campus Seller",
+          rating: 4.5,
+          trustScore: 4.5,
+          college: "PCE",
+          avatar: (l.seller_name ?? "CS").split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+        },
+        location: l.location ?? "Campus",
+        listedDate: l.created_at ?? new Date().toISOString(),
+        posted: l.created_at ?? new Date().toISOString(),
+      }))
+      setDbListings(mapped)
+    } catch {
+      // ignore errors
+    }
+  }, [])
+
+  // Merge: real listings first, then mock items
+  const allItems = [...dbListings, ...mockItems] as ListingItem[]
+
+  const filtered = allItems.filter((item) => {
     const matchSearch =
       item.title.toLowerCase().includes(search.toLowerCase()) ||
       item.description.toLowerCase().includes(search.toLowerCase()) ||
@@ -187,15 +241,15 @@ export default function MarketplacePage() {
                 </span>
               </div>
               <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1">
-                    <Star className="h-3 w-3 fill-current text-accent" />
-                    {item.seller.rating}
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-foreground">{item.seller.name}</span>
+                    <span className="text-muted-foreground/50">·</span>
+                    <span>{item.seller.college}</span>
                   </div>
-                  <span>{'|'}</span>
-                  <span>{item.seller.college}</span>
+                  <StarRating score={item.seller.trustScore} showLabel={true} />
                 </div>
-                <span className="rounded-full bg-muted px-2 py-0.5">
+                <span className="self-start rounded-full bg-muted px-2 py-0.5">
                   {item.condition}
                 </span>
               </div>

@@ -1,10 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import {
-  Star,
   Leaf,
   MessageSquare,
   Bookmark,
@@ -18,18 +17,97 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { mockItems } from "@/lib/mock-data"
+import { StarRating, TrustBadge } from "@/components/star-rating"
+
+type ItemType = {
+  id: string
+  title: string
+  price: number
+  category: string
+  condition: string
+  description: string
+  images: string[]
+  location: string
+  listedDate: string
+  seller: { name: string; college: string; avatar: string; trustScore: number }
+}
 
 export default function ItemDetailPage() {
   const params = useParams()
   const [currentImage, setCurrentImage] = useState(0)
-  const item = mockItems.find((i) => i.id === params.id) || mockItems[0]
+  const [item, setItem] = useState<ItemType | null>(null)
+
+  useEffect(() => {
+    const id = params.id as string
+
+    // Check localStorage first for locally posted items
+    if (id.startsWith("local-")) {
+      try {
+        const stored = localStorage.getItem("campus_cart_listings")
+        if (stored) {
+          const listings: {
+            id: string; title: string; price: number; category: string;
+            condition: string; description?: string; images?: string[];
+            location?: string; created_at?: string; seller_name?: string;
+          }[] = JSON.parse(stored)
+          const found = listings.find((l) => l.id === id)
+          if (found) {
+            setItem({
+              id: found.id,
+              title: found.title,
+              price: found.price,
+              category: found.category,
+              condition: found.condition,
+              description: found.description ?? "",
+              images: found.images?.length ? found.images : ["https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=400"],
+              location: found.location ?? "Campus",
+              listedDate: found.created_at ? new Date(found.created_at).toLocaleDateString("en-IN") : "Today",
+              seller: {
+                name: found.seller_name ?? "Campus Seller",
+                college: "PCE",
+                avatar: (found.seller_name ?? "CS").split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+                trustScore: 4.5,
+              },
+            })
+            return
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Fall back to mock data
+    const mock = mockItems.find((i) => i.id === id) ?? mockItems[0]
+    setItem({
+      id: mock.id,
+      title: mock.title,
+      price: mock.price,
+      category: mock.category,
+      condition: mock.condition,
+      description: mock.description,
+      images: mock.images,
+      location: mock.location,
+      listedDate: mock.listedDate ?? mock.posted,
+      seller: {
+        name: mock.seller.name,
+        college: mock.seller.college,
+        avatar: mock.seller.avatar,
+        trustScore: mock.seller.trustScore,
+      },
+    })
+  }, [params.id])
 
   const nextImage = () =>
-    setCurrentImage((prev) => (prev + 1) % item.images.length)
+    setCurrentImage((prev) => (prev + 1) % (item?.images.length ?? 1))
   const prevImage = () =>
     setCurrentImage(
-      (prev) => (prev - 1 + item.images.length) % item.images.length
+      (prev) => (prev - 1 + (item?.images.length ?? 1)) % (item?.images.length ?? 1)
     )
+
+  if (!item) return (
+    <div className="flex min-h-[60vh] items-center justify-center text-muted-foreground">
+      Loading...
+    </div>
+  )
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -73,8 +151,8 @@ export default function ItemDetailPage() {
                     key={i}
                     onClick={() => setCurrentImage(i)}
                     className={`h-2 w-2 rounded-full transition-all ${i === currentImage
-                        ? "w-6 bg-primary-foreground"
-                        : "bg-primary-foreground/50"
+                      ? "w-6 bg-primary-foreground"
+                      : "bg-primary-foreground/50"
                       }`}
                     aria-label={`Go to image ${i + 1}`}
                   />
@@ -137,11 +215,9 @@ export default function ItemDetailPage() {
                 <p className="text-xs text-muted-foreground">
                   {item.seller.college}
                 </p>
+                <StarRating score={item.seller.trustScore} className="mt-1" />
               </div>
-              <div className="flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-sm font-medium text-primary">
-                <Star className="h-3.5 w-3.5 fill-current" />
-                {item.seller.trustScore}
-              </div>
+              <TrustBadge score={item.seller.trustScore} />
             </div>
           </div>
 

@@ -8,10 +8,10 @@ import {
   Upload,
   Check,
   ArrowRight,
-  ArrowLeft,
   Loader2,
-  CheckCircle2,
-  Mail,
+  Eye,
+  EyeOff,
+  UserPlus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
 
-const stepLabels = ["Your Details", "Verify Email", "Profile Setup"]
+const stepLabels = ["Verify ID", "Profile Setup"]
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -34,102 +34,100 @@ export default function RegisterPage() {
 
   const [step, setStep] = useState(0)
 
-  // Step 1: Basic Details
-  const [fullName, setFullName] = useState("")
-  const [email, setEmail] = useState("")
-  const [phone, setPhone] = useState("")
-  const [linkSent, setLinkSent] = useState(false)
-  const [sendingLink, setSendingLink] = useState(false)
+  // Step 1
+  const [studentId, setStudentId] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [verifying, setVerifying] = useState(false)
+  const [detectedName, setDetectedName] = useState("")
+  const [fakeEmail, setFakeEmail] = useState("")
 
-  // Step 3: Profile Setup (step 2 is the "check email" screen)
+  // Step 2: Profile Setup
   const [college, setCollege] = useState("")
   const [hostel, setHostel] = useState("")
   const [agreed, setAgreed] = useState(false)
-  const [creatingAccount, setCreatingAccount] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  // Error & success
   const [error, setError] = useState("")
 
-  // ---------- Step 1: Send Magic Link ----------
-  const handleSendLink = async () => {
+  // ---------- Step 1: Verify Student ID ----------
+  const handleVerify = async () => {
     setError("")
-    if (!fullName.trim()) {
-      setError("Please enter your full name")
+    if (!studentId.trim()) {
+      setError("Please enter your Student ID")
       return
     }
-    if (!email || !email.includes("@")) {
-      setError("Please enter a valid email address")
+    if (!password || password.length < 6) {
+      setError("Password must be at least 6 characters")
+      return
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match")
       return
     }
 
-    setSendingLink(true)
-    const { error: otpError } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        data: { full_name: fullName.trim(), phone: phone || null },
-        emailRedirectTo: `${window.location.origin}/auth/callback?next=/register/complete`,
-      },
+    setVerifying(true)
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId: studentId.trim().toUpperCase(), password }),
     })
-    setSendingLink(false)
+    const result = await res.json()
+    setVerifying(false)
 
-    if (otpError) {
-      setError(otpError.message)
-    } else {
-      setLinkSent(true)
-      setStep(1)
+    if (!res.ok) {
+      setError(result.error || "Registration failed")
+      return
     }
+
+    // Sign in immediately to establish session
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: result.fakeEmail,
+      password,
+    })
+
+    if (signInError) {
+      setError(signInError.message)
+      return
+    }
+
+    setDetectedName(result.fullName)
+    setFakeEmail(result.fakeEmail)
+    setStep(1)
   }
 
-  // ---------- Step 3: Complete Profile ----------
+  // ---------- Step 2: Complete Profile ----------
   const handleCreateAccount = async () => {
     setError("")
-    if (!college) {
-      setError("Please select your college")
-      return
-    }
     if (!agreed) {
       setError("Please agree to the community guidelines")
       return
     }
 
-    setCreatingAccount(true)
-
+    setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
 
     if (user) {
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
-          full_name: fullName.trim() || user.user_metadata?.full_name || null,
-          college: college,
-          hostel: hostel || null,
-          phone: phone.replace(/\s/g, "") || user.user_metadata?.phone || null,
-        })
-        .eq("id", user.id)
-
-      if (profileError) {
-        setError(profileError.message)
-        setCreatingAccount(false)
-        return
-      }
+      await supabase.from("profiles").update({
+        college: college || null,
+        hostel: hostel || null,
+      }).eq("id", user.id)
     }
 
-    setCreatingAccount(false)
+    setSaving(false)
     router.push("/dashboard")
   }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Header */}
       <header className="border-b border-border bg-card/80 backdrop-blur-lg">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
               <ShieldCheck className="h-4 w-4 text-primary-foreground" />
             </div>
-            <span className="text-lg font-bold text-foreground">
-              CampusCart
-            </span>
+            <span className="text-lg font-bold text-foreground">CampusCart</span>
           </Link>
           <Link href="/login" className="text-sm text-muted-foreground hover:text-foreground">
             Already have an account?
@@ -144,31 +142,24 @@ export default function RegisterPage() {
             <div className="flex items-center justify-between">
               {stepLabels.map((label, i) => (
                 <div key={label} className="flex flex-col items-center gap-1.5">
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition-colors ${i < step
-                        ? "bg-primary text-primary-foreground"
-                        : i === step
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                  >
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold transition-colors ${i < step ? "bg-primary text-primary-foreground"
+                      : i === step ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}>
                     {i < step ? <Check className="h-4 w-4" /> : i + 1}
                   </div>
-                  <span className="hidden text-[10px] text-muted-foreground sm:block">
-                    {label}
-                  </span>
+                  <span className="hidden text-[10px] text-muted-foreground sm:block">{label}</span>
                 </div>
               ))}
             </div>
             <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full bg-primary transition-all duration-500"
-                style={{ width: `${((step + 1) / 3) * 100}%` }}
+                style={{ width: `${((step + 1) / 2) * 100}%` }}
               />
             </div>
           </div>
 
-          {/* Card */}
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm md:p-8">
             {error && (
               <div className="mb-4 rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -176,109 +167,78 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Step 1: Basic Details */}
+            {/* Step 1: Student ID + Password */}
             {step === 0 && (
               <div className="flex flex-col gap-5">
                 <div>
-                  <h2 className="text-xl font-bold text-foreground">
-                    Create your account
-                  </h2>
+                  <h2 className="text-xl font-bold text-foreground">Create your account</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Enter your details to get started
+                    Enter your Student ID and choose a password
                   </p>
                 </div>
                 <div className="flex flex-col gap-4">
                   <div>
-                    <Label htmlFor="name">Full Name</Label>
+                    <Label htmlFor="student-id">Student ID</Label>
                     <Input
-                      id="name"
-                      placeholder="Arjun Mehta"
-                      className="mt-1.5"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
+                      id="student-id"
+                      placeholder="e.g. BT240001"
+                      className="mt-1.5 uppercase"
+                      value={studentId}
+                      onChange={(e) => setStudentId(e.target.value.toUpperCase())}
                     />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Your name will be auto-filled from the student list
+                    </p>
                   </div>
                   <div>
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="you@university.ac.in"
-                      className="mt-1.5"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative mt-1.5">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="At least 6 characters"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
                   <div>
-                    <Label htmlFor="mobile">Mobile Number (optional)</Label>
+                    <Label htmlFor="confirm-password">Confirm Password</Label>
                     <Input
-                      id="mobile"
-                      placeholder="+91 98765 43210"
+                      id="confirm-password"
+                      type="password"
+                      placeholder="Re-enter your password"
                       className="mt-1.5"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleVerify() }}
                     />
                   </div>
                 </div>
-                <Button
-                  className="w-full gap-2"
-                  onClick={handleSendLink}
-                  disabled={sendingLink}
-                >
-                  {sendingLink ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Mail className="h-4 w-4" />
-                  )}
-                  Send Verification Link
+                <Button className="w-full gap-2" onClick={handleVerify} disabled={verifying}>
+                  {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                  Verify & Continue
                 </Button>
               </div>
             )}
 
-            {/* Step 2: Check Email */}
+            {/* Step 2: Profile Setup */}
             {step === 1 && (
-              <div className="flex flex-col items-center gap-4 py-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                  <CheckCircle2 className="h-8 w-8 text-primary" />
-                </div>
-                <div className="text-center">
-                  <h3 className="text-lg font-semibold text-foreground">Check your email!</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    We sent a verification link to <strong>{email}</strong>
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Click the link in the email to verify your account. Check your spam folder if you don&apos;t see it.
-                  </p>
-                </div>
-                <div className="mt-2 flex w-full flex-col items-center gap-3 rounded-lg bg-primary/5 px-4 py-3">
-                  <p className="text-xs font-medium text-primary">
-                    After verifying, you&apos;ll be redirected back here to complete your profile setup.
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setLinkSent(false)
-                    setStep(0)
-                    setError("")
-                  }}
-                  className="mt-2"
-                >
-                  Use a different email
-                </Button>
-              </div>
-            )}
-
-            {/* Step 3: Profile Setup */}
-            {step === 2 && (
               <div className="flex flex-col gap-5">
                 <div>
-                  <h2 className="text-xl font-bold text-foreground">
-                    Set up your profile
-                  </h2>
+                  <div className="mb-3 rounded-lg bg-primary/10 px-4 py-3 text-sm text-primary font-medium">
+                    ✅ Welcome, {detectedName}! Your identity is verified.
+                  </div>
+                  <h2 className="text-xl font-bold text-foreground">Complete your profile</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Complete your campus identity
+                    Add your campus details (optional)
                   </p>
                 </div>
                 <div className="flex flex-col gap-4">
@@ -295,12 +255,11 @@ export default function RegisterPage() {
                         <SelectValue placeholder="Select your college" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="PCE">Pillai College of Engineering</SelectItem>
                         <SelectItem value="IIT Delhi">IIT Delhi</SelectItem>
                         <SelectItem value="IIT Bombay">IIT Bombay</SelectItem>
-                        <SelectItem value="IIT Madras">IIT Madras</SelectItem>
                         <SelectItem value="BITS Pilani">BITS Pilani</SelectItem>
                         <SelectItem value="NIT Trichy">NIT Trichy</SelectItem>
-                        <SelectItem value="PCE">Pillai College of Engineering</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -311,11 +270,11 @@ export default function RegisterPage() {
                         <SelectValue placeholder="Select hostel or department" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="Computer Science">Computer Science</SelectItem>
+                        <SelectItem value="Electrical Engineering">Electrical Engineering</SelectItem>
                         <SelectItem value="Hostel Block A">Hostel Block A</SelectItem>
                         <SelectItem value="Hostel Block B">Hostel Block B</SelectItem>
                         <SelectItem value="Hostel Block C">Hostel Block C</SelectItem>
-                        <SelectItem value="Computer Science">Computer Science</SelectItem>
-                        <SelectItem value="Electrical Engineering">Electrical Engineering</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -331,15 +290,9 @@ export default function RegisterPage() {
                     </Label>
                   </div>
                 </div>
-                <Button
-                  className="w-full gap-1"
-                  onClick={handleCreateAccount}
-                  disabled={creatingAccount}
-                >
-                  {creatingAccount ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : null}
-                  Create Account
+                <Button className="w-full gap-1" onClick={handleCreateAccount} disabled={saving}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Enter CampusCart
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -348,9 +301,7 @@ export default function RegisterPage() {
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{" "}
-            <Link href="/login" className="font-medium text-primary hover:underline">
-              Log in
-            </Link>
+            <Link href="/login" className="font-medium text-primary hover:underline">Log in</Link>
           </p>
         </div>
       </main>

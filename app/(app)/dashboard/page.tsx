@@ -1,4 +1,7 @@
+"use client"
+
 import Link from "next/link"
+import { useEffect, useState } from "react"
 import {
   ShoppingBag,
   Heart,
@@ -10,49 +13,86 @@ import {
   Package,
   TrendingUp,
   Recycle,
+  Loader2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { mockUser, mockItems } from "@/lib/mock-data"
-
-const stats = [
-  {
-    icon: Package,
-    label: "My Listings",
-    value: mockUser.listings,
-    href: "/profile",
-    color: "bg-primary/10 text-primary",
-  },
-  {
-    icon: Heart,
-    label: "Saved Items",
-    value: 3,
-    href: "/marketplace",
-    color: "bg-accent/20 text-accent-foreground",
-  },
-  {
-    icon: MessageSquare,
-    label: "Messages",
-    value: 5,
-    href: "/chat",
-    color: "bg-secondary text-secondary-foreground",
-  },
-  {
-    icon: Star,
-    label: "Trust Score",
-    value: mockUser.trustScore,
-    href: "/profile",
-    color: "bg-primary/10 text-primary",
-  },
-]
+import { mockItems } from "@/lib/mock-data"
+import { createClient } from "@/lib/supabase/client"
 
 export default function DashboardPage() {
+  const supabase = createClient()
+  const [userName, setUserName] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        // Try profile table first, fall back to auth metadata, then email
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .single()
+
+        const name =
+          profile?.full_name ||
+          user.user_metadata?.full_name ||
+          user.email?.split("@")[0] ||
+          "there"
+        setUserName(name)
+      }
+      setLoading(false)
+    }
+    fetchUser()
+  }, [])
+
+  const firstName = userName?.split(" ")[0] ?? ""
+
+  const stats = [
+    {
+      icon: Package,
+      label: "My Listings",
+      value: 0,
+      href: "/profile",
+      color: "bg-primary/10 text-primary",
+    },
+    {
+      icon: Heart,
+      label: "Saved Items",
+      value: 3,
+      href: "/marketplace",
+      color: "bg-accent/20 text-accent-foreground",
+    },
+    {
+      icon: MessageSquare,
+      label: "Messages",
+      value: 5,
+      href: "/chat",
+      color: "bg-secondary text-secondary-foreground",
+    },
+    {
+      icon: Star,
+      label: "Trust Score",
+      value: "4.8",
+      href: "/profile",
+      color: "bg-primary/10 text-primary",
+    },
+  ]
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       {/* Greeting */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
-            Welcome back, {mockUser.name.split(" ")[0]}
+            {loading ? (
+              <span className="inline-flex items-center gap-2">
+                Welcome back <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </span>
+            ) : (
+              `Welcome back, ${firstName}!`
+            )}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Here&apos;s what&apos;s happening on your campus marketplace
@@ -116,27 +156,21 @@ export default function DashboardPage() {
               <Recycle className="h-4 w-4 text-primary" />
               <span className="text-sm text-muted-foreground">Items Reused</span>
             </div>
-            <p className="mt-2 text-3xl font-bold text-foreground">
-              {mockUser.itemsReused}
-            </p>
+            <p className="mt-2 text-3xl font-bold text-foreground">0</p>
           </div>
           <div className="rounded-xl bg-background p-4">
             <div className="flex items-center gap-2">
               <Leaf className="h-4 w-4 text-primary" />
-              <span className="text-sm text-muted-foreground">{'CO\u2082 Saved'}</span>
+              <span className="text-sm text-muted-foreground">CO₂ Saved</span>
             </div>
-            <p className="mt-2 text-3xl font-bold text-foreground">
-              {mockUser.co2Saved} kg
-            </p>
+            <p className="mt-2 text-3xl font-bold text-foreground">0 kg</p>
           </div>
           <div className="rounded-xl bg-background p-4">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-primary" />
               <span className="text-sm text-muted-foreground">Money Saved</span>
             </div>
-            <p className="mt-2 text-3xl font-bold text-foreground">
-              ₹1,240
-            </p>
+            <p className="mt-2 text-3xl font-bold text-foreground">₹0</p>
           </div>
         </div>
       </div>
